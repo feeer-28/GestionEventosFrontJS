@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AdminAPI } from '../../lib/api'
+import { AdminAPI, ArtistAPI } from '../../lib/api'
 import Modal from '../../components/Modal'
 import ArtistForm from '../../components/ArtistForm'
 import { useToast } from '../../context/ToastContext'
@@ -16,7 +16,14 @@ export default function AdminArtists() {
     setError('')
     setLoading(true)
     try {
-      const data = await AdminAPI.artistas()
+      // Preferir backend Spring para listar artistas
+      let data = []
+      try {
+        data = await ArtistAPI.list()
+      } catch (e) {
+        // Si falla el backend Spring, intentar el API existente
+        data = await AdminAPI.artistas()
+      }
       setItems(Array.isArray(data) ? data : [])
     } catch (err) {
       setError(err.message || 'Error al cargar artistas')
@@ -30,11 +37,22 @@ export default function AdminArtists() {
   async function onDeactivate(a) {
     if (!confirm('¿Desactivar este artista?')) return
     try {
-      await AdminAPI.desactivarArtista(a.idartista || a.id)
+      await ArtistAPI.setStatus(a.idartista || a.id || a.id_artist, 0)
       show('Artista desactivado', 'success')
       await load()
     } catch (err) {
       show(err.message || 'No se pudo desactivar', 'error')
+    }
+  }
+
+  async function onActivate(a) {
+    if (!confirm('¿Activar este artista?')) return
+    try {
+      await ArtistAPI.setStatus(a.idartista || a.id || a.id_artist, 1)
+      show('Artista activado', 'success')
+      await load()
+    } catch (err) {
+      show(err.message || 'No se pudo activar', 'error')
     }
   }
 
@@ -59,14 +77,19 @@ export default function AdminArtists() {
           </thead>
           <tbody>
             {!loading && items.map(e => (
-              <tr key={e.idartista || e.id} className="border-t">
-                <td className="px-4 py-2">{e.nombre}</td>
-                <td className="px-4 py-2">{e.genero_musical?.nombre_genero || e.genero || e.genero_musical_idgenero_musical}</td>
-                <td className="px-4 py-2 capitalize">{e.estado}</td>
+              <tr key={e.idartista || e.id || e.id_artist || e.id} className="border-t">
+                <td className="px-4 py-2">{e.nombre || e.name}</td>
+                <td className="px-4 py-2">{e.genderMusic?.name || e.genero_musical?.nombre_genero || e.genero || e.genero_musical?.descripcion || e.genderMusic?.id_genderMusic}</td>
+                <td className="px-4 py-2 capitalize">{e.estado || (typeof e.status === 'number' ? (e.status === 1 ? 'activo' : 'inactivo') : e.status)}</td>
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-2">
                     <button onClick={()=>{ setEditing(e); setOpen(true) }} className="p-2 rounded hover:bg-slate-100"><i className="bi bi-pencil" /></button>
-                    <button onClick={()=>onDeactivate(e)} className="p-2 rounded hover:bg-slate-100 text-red-600"><i className="bi bi-x-circle" /></button>
+                    {((e.estado ? e.estado === 'activo' : (typeof e.status === 'number' ? e.status === 1 : e.status === 'activo')))
+                      ? (
+                        <button onClick={()=>onDeactivate(e)} className="p-2 rounded hover:bg-slate-100 text-red-600"><i className="bi bi-x-circle" /></button>
+                      ) : (
+                        <button onClick={()=>onActivate(e)} className="p-2 rounded hover:bg-slate-100 text-emerald-600"><i className="bi bi-check-circle" /></button>
+                      )}
                   </div>
                 </td>
               </tr>

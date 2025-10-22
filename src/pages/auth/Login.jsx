@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AuthAPI, encodeBasic } from '../../lib/api'
+import { LoginAPI, encodeBasic } from '../../lib/api'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -14,14 +14,15 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      const { user, token } = await AuthAPI.login(email, password)
+      const { user, token } = await LoginAPI.login(email, password)
       const basic = token || encodeBasic(email, password)
       localStorage.setItem('token', basic)
       localStorage.setItem('user', JSON.stringify(user))
-      if (user.rol === 'administrador') navigate('/admin')
+      const rol = (user.rol || user.role || 'cliente').toString().toLowerCase()
+      if (rol === 'administrador' || rol === 'admin') navigate('/admin')
       else navigate('/user')
     } catch (err) {
-      setError(err.message || 'Error al iniciar sesión')
+      setError(err.data?.message || err.message || 'Error al iniciar sesión')
     } finally {
       setLoading(false)
     }

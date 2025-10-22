@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AuthAPI } from '../../lib/api'
+import { RegisterApi, LoginAPI } from '../../lib/api'
 
 export default function Register() {
   const [form, setForm] = useState({ nombre: '', apellidos: '', tipodocumento: 'CC', documento: '', email: '', password: '', confirmpassword: '', rol: 'cliente' })
@@ -21,10 +21,15 @@ export default function Register() {
         return
       }
       const payload = { nombre: form.nombre, apellidos: form.apellidos, tipodocumento: form.tipodocumento, documento: form.documento, email: form.email, password: form.password, rol: form.rol }
-      const { user, token } = await AuthAPI.register(payload)
-      localStorage.setItem('token', token)
-      localStorage.setItem('user', JSON.stringify(user))
-      if (user.rol === 'administrador') navigate('/admin')
+      let { user, token } = await RegisterApi.register(payload)
+      if (!token) {
+        const loginRes = await LoginAPI.login(form.email, form.password)
+        user = loginRes.user || user
+        token = loginRes.token
+      }
+      if (token) localStorage.setItem('token', token)
+      if (user) localStorage.setItem('user', JSON.stringify(user))
+      if (user && user.rol === 'administrador') navigate('/admin')
       else navigate('/user')
     } catch (err) {
       setError(err.message || 'Error al registrar')

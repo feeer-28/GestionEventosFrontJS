@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AdminAPI } from '../../lib/api'
+import { EventoAPI } from '../../lib/api'
 import Modal from '../../components/Modal'
 import EventForm from '../../components/EventForm'
 import { useToast } from '../../context/ToastContext'
@@ -16,7 +16,7 @@ export default function AdminEvents() {
     setError('')
     setLoading(true)
     try {
-      const data = await AdminAPI.eventos()
+      const data = await EventoAPI.list()
       setItems(Array.isArray(data) ? data : [])
     } catch (err) {
       setError(err.message || 'Error al cargar eventos')
@@ -30,7 +30,7 @@ export default function AdminEvents() {
   async function onDeactivate(e) {
     if (!confirm('¿Desactivar este evento?')) return
     try {
-      await AdminAPI.desactivarEvento(e.ideventos || e.id)
+      await EventoAPI.desactivarEvento(e.ideventos || e.id)
       show('Evento desactivado', 'success')
       await load()
     } catch (err) {

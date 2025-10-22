@@ -18,7 +18,7 @@ export function AuthProvider({ children }) {
     user,
     token,
     isAuthenticated: !!token,
-    role: user?.rol || null,
+    role: user?.rol || user?.role || null,
     setAuth: (u, t) => { setUser(u); setToken(t); localStorage.setItem('user', JSON.stringify(u)); localStorage.setItem('token', t) },
     clearAuth: () => { setUser(null); setToken(null); localStorage.removeItem('user'); localStorage.removeItem('token') },
   }), [user, token])

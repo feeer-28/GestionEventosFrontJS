@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LoginAPI, encodeBasic } from '../../lib/api'
+import { useAuth } from '../../context/AuthContext'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -8,6 +9,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
+  const { setAuth } = useAuth()
 
   async function onSubmit(e) {
     e.preventDefault()
@@ -16,8 +18,7 @@ export default function Login() {
     try {
       const { user, token } = await LoginAPI.login(email, password)
       const basic = token || encodeBasic(email, password)
-      localStorage.setItem('token', basic)
-      localStorage.setItem('user', JSON.stringify(user))
+      setAuth(user, basic)
       const rol = (user.rol || user.role || 'cliente').toString().toLowerCase()
       if (rol === 'administrador' || rol === 'admin') navigate('/admin')
       else navigate('/user')

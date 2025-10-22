@@ -26,14 +26,22 @@ function App() {
         <Route path="/events" element={<UserEvents />} />
         <Route path="/events/:id" element={<EventDetail />} />
 
-        <Route path="/admin" element={<AdminLayout />}>
+        <Route path="/admin" element={
+          <ProtectedRoute role="administrador">
+            <AdminLayout />
+          </ProtectedRoute>
+        }>
           <Route index element={<Navigate to="events" replace />} />
           <Route path="events" element={<AdminEvents />} />
           <Route path="artists" element={<AdminArtists />} />
           <Route path="localities" element={<AdminLocalities />} />
         </Route>
 
-        <Route path="/user" element={<UserLayout />}>
+        <Route path="/user" element={
+          <ProtectedRoute>
+            <UserLayout />
+          </ProtectedRoute>
+        }>
           <Route index element={<Navigate to="events" replace />} />
           <Route path="events" element={<UserEvents />} />
           <Route path="events/:id" element={<EventDetail />} />

@@ -89,7 +89,8 @@ export default function EventDetail({ eventId }) {
       await BuyoutAPI.create(body)
       setSuccessOpen(true)
     } catch (err) {
-      setError(err.message || 'No se pudo completar la compra')
+      const msg = (err && (err.data?.message || err.message)) || 'No se pudo completar la compra'
+      setError(msg)
     } finally {
       setSubmitting(false)
     }

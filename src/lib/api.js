@@ -5,6 +5,64 @@ function authHeader() {
   return token ? { Authorization: `Basic ${token}` } : {}
 }
 
+export const PaymentMethodAPI = {
+  async list() {
+    const res = await fetch('http://localhost:8081/api/v1/payment-method/', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) {
+      let data
+      try { data = await res.json() } catch { data = { message: res.statusText } }
+      const error = new Error(data.message || 'Error de servidor')
+      error.status = res.status
+      error.data = data
+      throw error
+    }
+    const ct = res.headers.get('content-type') || ''
+    return ct.includes('application/json') ? res.json() : null
+  }
+}
+
+export const TicketAPI = {
+  async list() {
+    const res = await fetch('http://localhost:8081/api/v1/ticket/', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) {
+      let data
+      try { data = await res.json() } catch { data = { message: res.statusText } }
+      const error = new Error(data.message || 'Error de servidor')
+      error.status = res.status
+      error.data = data
+      throw error
+    }
+    const ct = res.headers.get('content-type') || ''
+    return ct.includes('application/json') ? res.json() : []
+  }
+}
+
+export const BuyoutAPI = {
+  async create(body) {
+    const res = await fetch('http://localhost:8081/api/v1/buyout/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      let data
+      try { data = await res.json() } catch { data = { message: res.statusText } }
+      const error = new Error(data.message || 'Error de servidor')
+      error.status = res.status
+      error.data = data
+      throw error
+    }
+    const ct = res.headers.get('content-type') || ''
+    return ct.includes('application/json') ? res.json() : null
+  }
+}
+
 // Spring auth/login for the app's Login.jsx
 export const LoginAPI = {
   async login(email, password) {

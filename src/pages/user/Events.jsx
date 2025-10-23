@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { EventoAPI, MunicipioAPI, DepartmentAPI, UserAPI } from '../../lib/api'
+import Modal from '../../components/Modal'
+import EventDetail from './EventDetail'
+import EventDetailLanding from './EventDatailLanding'
 
 export default function UserEvents() {
   const [filters, setFilters] = useState({ depto: '', muni: '', search: '', start: '', end: '' })
@@ -11,6 +14,8 @@ export default function UserEvents() {
   const [error, setError] = useState('')
   const [artistsByEvent, setArtistsByEvent] = useState({}) // id -> string[]
   const [availByEvent, setAvailByEvent] = useState({}) // id -> { [localidad]: count }
+  const [modalOpen, setModalOpen] = useState(false)
+  const [selectedId, setSelectedId] = useState(null)
 
   useEffect(() => {
     async function init() {
@@ -85,6 +90,14 @@ export default function UserEvents() {
   }, [items])
 
   const list = useMemo(() => items, [items])
+  const hasSession = useMemo(() => {
+    try { return !!JSON.parse(localStorage.getItem('user')||'null') } catch { return false }
+  }, [])
+
+  function openEvent(id) {
+    setSelectedId(id)
+    setModalOpen(true)
+  }
 
   function fmt(dateStr) {
     if (!dateStr) return ''
@@ -129,7 +142,7 @@ export default function UserEvents() {
           const end = fmt(e.date_end || e.fecha_fin)
           const schedule = e.schedule || ''
           return (
-          <Link key={id} to={id ? `/user/events/${id}` : '#'} className="bg-white rounded-xl shadow hover:shadow-md transition p-4 hover:ring-2 hover:ring-purple-300">
+          <div key={id} onClick={()=>openEvent(id)} className="cursor-pointer bg-white rounded-xl shadow hover:shadow-md transition p-4 hover:ring-2 hover:ring-purple-300">
             <div className="font-semibold">{title}</div>
             <div className="text-sm text-slate-600">{muni}{dept ? `, ${dept}` : ''}</div>
             <div className="text-sm text-slate-600">{start}{end ? ` - ${end}` : ''}{schedule ? ` · ${schedule}` : ''}</div>
@@ -145,11 +158,21 @@ export default function UserEvents() {
                 ))}
               </div>
             )}
-          </Link>
+          </div>
         )})}
         {loading && (<div className="col-span-full text-slate-600">Cargando...</div>)}
       </div>
       {error && <div className="text-red-600 text-sm">{error}</div>}
+
+      <Modal open={modalOpen} title="Detalle de evento" onClose={()=>setModalOpen(false)}>
+        {selectedId && (
+          hasSession ? (
+            <EventDetail eventId={selectedId} />
+          ) : (
+            <EventDetailLanding eventId={selectedId} />
+          )
+        )}
+      </Modal>
     </div>
   )
 }

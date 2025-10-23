@@ -1,17 +1,10 @@
 import { useState } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { AuthAPI } from '../lib/api'
+import { Outlet, NavLink } from 'react-router-dom'
 import Modal from '../components/Modal'
 import ProfileForm from '../components/ProfileForm'
+import LogoutButton from '../components/LogoutButton'
 
 export default function AdminLayout() {
-  const navigate = useNavigate()
-  async function logout() {
-    try { await AuthAPI.logout() } catch {}
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    navigate('/')
-  }
   const [open, setOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
 
@@ -31,9 +24,9 @@ export default function AdminLayout() {
           </NavLink>
         
         </nav>
-        <button onClick={logout} className="mt-auto md:mt-auto inline-flex items-center gap-2 px-3 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white"> 
+        <LogoutButton className="mt-auto md:mt-auto inline-flex items-center gap-2 px-3 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white"> 
           <i className="bi bi-box-arrow-right" /> Cerrar sesión
-        </button>
+        </LogoutButton>
       </aside>
       {/* Backdrop mobile */}
       {navOpen && <div className="fixed inset-0 bg-black/40 md:hidden z-10" onClick={()=>setNavOpen(false)} />}

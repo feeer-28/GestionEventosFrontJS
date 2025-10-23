@@ -23,22 +23,27 @@ export const LoginAPI = {
     }
     const ct = res.headers.get('content-type') || ''
     const data = ct.includes('application/json') ? await res.json() : {}
-    // Normalize shape expected by Login.jsx and ProtectedRoute
-    const rawUser = data.user || data.person || { email }
-    const arrRole = (() => {
-      const r1 = Array.isArray(rawUser.roles) ? rawUser.roles : null
-      const r2 = Array.isArray(rawUser.authorities) ? rawUser.authorities : null
-      const r3 = Array.isArray(data.roles) ? data.roles : null
-      const r4 = Array.isArray(data.authorities) ? data.authorities : null
-      return r1 || r2 || r3 || r4 || null
-    })()
-    let roleVal = (rawUser.rol || rawUser.role || data.role || data.rol || '')
-    if (!roleVal && arrRole) {
-      const first = arrRole[0]
-      roleVal = (first?.name || first?.role || first?.authority || first) || ''
+    // Normalizar para preservar id_user, role y person cuando existan
+    const roleName = (data.role?.name || data.role || data.rol || 'CLIENT')
+    const fullName = data.person?.full_name || ''
+    const parts = String(fullName).trim().split(' ')
+    const apellidos = parts.length > 1 ? parts.slice(1).join(' ') : ''
+    const nombre = parts[0] || ''
+    const idFromData = (
+      data.id_user ?? data.idUser ?? data.id ??
+      data.user?.id_user ?? data.user?.idUser ?? data.user?.id ?? data.user?.idusuario ??
+      data.person?.id_user ?? data.person?.idUser ?? null
+    )
+    const user = {
+      id_user: idFromData ?? null,
+      email: data.email ?? data.user?.email ?? email,
+      rol: roleName,
+      // Campos auxiliares para UI
+      nombre,
+      apellidos,
+      tipodocumento: data.person?.type_identification || 'CC',
+      documento: data.person?.number_identification != null ? String(data.person.number_identification) : '',
     }
-    roleVal = roleVal || 'usuario'
-    const user = { ...rawUser, rol: roleVal }
     return {
       user,
       token: data.token || data.accessToken || data.jwt || null,
@@ -453,5 +458,60 @@ export const MunicipioAPI = {
     }
     const ct = res.headers.get('content-type') || ''
     return ct.includes('application/json') ? res.json() : []
+  }
+}
+
+export const DepartmentAPI = {
+  async list() {
+    const res = await fetch('http://localhost:8081/api/v1/department/', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) {
+      let data
+      try { data = await res.json() } catch { data = { message: res.statusText } }
+      const error = new Error(data.message || 'Error de servidor')
+      error.status = res.status
+      error.data = data
+      throw error
+    }
+    const ct = res.headers.get('content-type') || ''
+    return ct.includes('application/json') ? res.json() : []
+  }
+}
+
+export const UserProfileAPI = {
+  async get(id) {
+    const res = await fetch(`http://localhost:8081/api/v1/user/${id}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) {
+      let data
+      try { data = await res.json() } catch { data = { message: res.statusText } }
+      const error = new Error(data.message || 'Error de servidor')
+      error.status = res.status
+      error.data = data
+      throw error
+    }
+    const ct = res.headers.get('content-type') || ''
+    return ct.includes('application/json') ? res.json() : null
+  },
+  async update(id, body) {
+    const res = await fetch(`http://localhost:8081/api/v1/user/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      let data
+      try { data = await res.json() } catch { data = { message: res.statusText } }
+      const error = new Error(data.message || 'Error de servidor')
+      error.status = res.status
+      error.data = data
+      throw error
+    }
+    const ct = res.headers.get('content-type') || ''
+    return ct.includes('application/json') ? res.json() : null
   }
 }

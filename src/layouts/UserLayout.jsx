@@ -1,17 +1,10 @@
 import { useState } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { AuthAPI } from '../lib/api'
+import { Outlet, NavLink } from 'react-router-dom'
 import Modal from '../components/Modal'
 import ProfileForm from '../components/ProfileForm'
+import LogoutButton from '../components/LogoutButton'
 
 export default function UserLayout() {
-  const navigate = useNavigate()
-  async function logout() {
-    try { await AuthAPI.logout() } catch {}
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    navigate('/')
-  }
   const [open, setOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
 
@@ -35,7 +28,9 @@ export default function UserLayout() {
           </nav>
           <div className="flex items-center gap-2">
             <button onClick={()=>setOpen(true)} className="inline-flex items-center gap-2 px-3 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white"><i className="bi bi-person-circle" /> Perfil</button>
-            <button onClick={logout} className="inline-flex items-center gap-2 px-3 py-2 rounded bg-red-600 hover:bg-red-500 text-white"><i className="bi bi-box-arrow-right" /> Salir</button>
+            <LogoutButton className="inline-flex items-center gap-2 px-3 py-2 rounded bg-red-600 hover:bg-red-500 text-white">
+              <i className="bi bi-box-arrow-right" /> Salir
+            </LogoutButton>
           </div>
         </div>
       </header>

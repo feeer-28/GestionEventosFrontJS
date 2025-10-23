@@ -27,9 +27,8 @@ function App() {
         <Route path="/events/:id" element={<EventDetail />} />
 
         <Route path="/admin" element={
-          <ProtectedRoute role="administrador">
             <AdminLayout />
-          </ProtectedRoute>
+          
         }>
           <Route index element={<Navigate to="events" replace />} />
           <Route path="events" element={<AdminEvents />} />

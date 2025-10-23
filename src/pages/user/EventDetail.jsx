@@ -1,11 +1,12 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import Modal from '../../components/Modal'
 import { EventoAPI, PaymentMethodAPI, TicketAPI, BuyoutAPI } from '../../lib/api'
 
-export default function EventDetail() {
+export default function EventDetail({ eventId }) {
   const { id: idParam } = useParams()
   const location = useLocation()
+  const id = eventId || idParam || location.state?.id
   const navigate = useNavigate()
   const [evento, setEvento] = useState(null)
   const [tickets, setTickets] = useState([])

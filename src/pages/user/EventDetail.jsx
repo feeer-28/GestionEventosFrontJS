@@ -4,7 +4,8 @@ import Modal from '../../components/Modal'
 import { EventoAPI, PaymentMethodAPI, TicketAPI, BuyoutAPI } from '../../lib/api'
 
 export default function EventDetail() {
-  const { id } = useParams()
+  const { id: idParam } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const [evento, setEvento] = useState(null)
   const [tickets, setTickets] = useState([])

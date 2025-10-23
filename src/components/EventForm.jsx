@@ -53,17 +53,53 @@ export default function EventForm({ initial, onClose, onSaved }) {
 
   useEffect(() => {
     if (initial) {
+      const toInput = (s) => {
+        if (!s) return ''
+        const d = new Date(s)
+        if (isNaN(d.getTime())) return s
+        const pad = (n) => String(n).padStart(2, '0')
+        const y = d.getFullYear()
+        const m = pad(d.getMonth() + 1)
+        const day = pad(d.getDate())
+        const hh = pad(d.getHours())
+        const mm = pad(d.getMinutes())
+        return `${y}-${m}-${day}T${hh}:${mm}`
+      }
+      const ev = initial.event || initial
+      const id = initial.ideventos || initial.id || ev?.id || ''
+      const name = initial.nombre_evento || initial.nombre || ev?.name || ''
+      const desc = initial.descripcion || ev?.description || ''
+      const ds = toInput(initial.fecha_inicio || ev?.date_start || '')
+      const de = toInput(initial.fecha_fin || ev?.date_end || '')
+      const st = typeof (initial.estado) !== 'undefined'
+        ? initial.estado
+        : (typeof ev?.status !== 'undefined' ? (Number(ev.status)===1?'activo':'inactivo') : 'activo')
+      const muni = initial.municipio_idmunicipio
+        || initial.municipio?.idmunicipio
+        || ev?.municipio?.id_municipio
+        || ''
+      const artists = (initial.artistIds)
+        ? initial.artistIds
+        : (initial.artistas || ev?.artists || []).map(a => a.idartista || a.id || a)
+
       setForm({
-        ideventos: initial.ideventos || initial.id || '',
-        nombre_evento: initial.nombre_evento || initial.nombre || '',
-        descripcion: initial.descripcion || '',
-        fecha_inicio: initial.fecha_inicio || '',
-        fecha_fin: initial.fecha_fin || '',
-        estado: initial.estado || 'activo',
+        ideventos: id,
+        nombre_evento: name,
+        descripcion: desc,
+        fecha_inicio: ds,
+        fecha_fin: de,
+        estado: st,
         total_asientos: initial.total_asientos || '',
-        municipio_idmunicipio: initial.municipio_idmunicipio || initial.municipio?.idmunicipio || '',
-        artistas: (initial.artistas || []).map(a => a.idartista || a),
+        municipio_idmunicipio: muni,
+        artistas: artists.map(Number),
       })
+
+      const tks = (initial.tickets || []).map(t => ({
+        locatedEventId: t.locatedEvent?.id_located_event || t.locatedEventId || t.id_located_event || '',
+        value: t.value ?? '',
+        count: t.count ?? '',
+      }))
+      if (tks.length > 0) setTickets(tks)
     }
   }, [initial])
 
@@ -77,10 +113,13 @@ export default function EventForm({ initial, onClose, onSaved }) {
       const start = new Date(form.fecha_inicio)
       const end = new Date(form.fecha_fin)
 
-      // Validaciones mínimas
-      if (!form.municipio_idmunicipio) throw new Error('Selecciona un municipio')
+      const isEdit = !!initial
+      // Validaciones
+      if (!isEdit) {
+        if (!form.municipio_idmunicipio) throw new Error('Selecciona un municipio')
+      }
       const ticketsValid = tickets.filter(t => t.locatedEventId && Number(t.value) > 0 && Number(t.count) > 0)
-      if (ticketsValid.length === 0) throw new Error('Agrega al menos una boleta válida (localidad, valor y cantidad)')
+      if (!isEdit && ticketsValid.length === 0) throw new Error('Agrega al menos una boleta válida (localidad, valor y cantidad)')
 
       const toNoZ = (d) => {
         const pad = (n) => String(n).padStart(2, '0')
@@ -99,27 +138,31 @@ export default function EventForm({ initial, onClose, onSaved }) {
           return `${sh}-${eh}`
         } catch { return undefined }
       })()
-      const springPayload = {
-        event: {
-          name: form.nombre_evento,
-          description: form.descripcion,
-          code: form.ideventos ? Number(form.ideventos) : undefined,
-          status: form.estado === 'activo' ? 1 : 0,
-          schedule: scheduleRange,
-          date_start: isNaN(start.getTime()) ? undefined : toNoZ(start),
-          date_end: isNaN(end.getTime()) ? undefined : toNoZ(end),
-          municipio: { id_municipio: Number(form.municipio_idmunicipio) },
-        },
-        tickets: ticketsValid
-          .map(t => ({
-            value: Number(t.value),
-            count: Number(t.count),
-            locatedEvent: { id_located_event: Number(t.locatedEventId) },
-          })),
-        artistIds: form.artistas.map(Number),
+      const springEvent = {
+        name: form.nombre_evento,
+        description: form.descripcion,
+        code: form.ideventos ? Number(form.ideventos) : undefined,
+        status: form.estado === 'activo' ? 1 : 0,
+        schedule: scheduleRange,
+        date_start: isNaN(start.getTime()) ? undefined : toNoZ(start),
+        date_end: isNaN(end.getTime()) ? undefined : toNoZ(end),
+        municipio: form.municipio_idmunicipio ? { id_municipio: Number(form.municipio_idmunicipio) } : undefined,
+      }
+      const springPayload = { event: springEvent }
+      if (!isEdit || ticketsValid.length > 0) {
+        springPayload.tickets = ticketsValid.map(t => ({
+          value: Number(t.value),
+          count: Number(t.count),
+          locatedEvent: { id_located_event: Number(t.locatedEventId) },
+        }))
+      }
+      if (form.artistas && form.artistas.length > 0) {
+        springPayload.artistIds = form.artistas.map(Number)
       }
       if (initial) {
-        await EventoAPI.update(initial.ideventos || initial.id, springPayload)
+        const updateId = initial.event?.id || initial.ideventos || initial.id || initial.event?.code || initial.code
+        if (!updateId && updateId !== 0) throw new Error('Id de evento no válido para actualizar')
+        await EventoAPI.update(updateId, springPayload)
       } else {
         await EventoAPI.create(springPayload)
       }
@@ -155,11 +198,11 @@ export default function EventForm({ initial, onClose, onSaved }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-sm text-slate-600">Fecha inicio</label>
-          <input type="datetime-local" value={form.fecha_inicio} onChange={e=>setField('fecha_inicio', e.target.value)} required className="mt-1 w-full rounded-lg border px-3 py-2" />
+          <input type="datetime-local" value={form.fecha_inicio} onChange={e=>setField('fecha_inicio', e.target.value)} required={!initial} className="mt-1 w-full rounded-lg border px-3 py-2" />
         </div>
         <div>
           <label className="block text-sm text-slate-600">Fecha fin</label>
-          <input type="datetime-local" value={form.fecha_fin} onChange={e=>setField('fecha_fin', e.target.value)} required className="mt-1 w-full rounded-lg border px-3 py-2" />
+          <input type="datetime-local" value={form.fecha_fin} onChange={e=>setField('fecha_fin', e.target.value)} required={!initial} className="mt-1 w-full rounded-lg border px-3 py-2" />
         </div>
       </div>
       <div>
@@ -223,12 +266,12 @@ export default function EventForm({ initial, onClose, onSaved }) {
         </div>
         <div>
           <label className="block text-sm text-slate-600">Total asientos</label>
-          <input type="number" value={form.total_asientos} onChange={e=>setField('total_asientos', e.target.value)} required className="mt-1 w-full rounded-lg border px-3 py-2" />
+          <input type="number" value={form.total_asientos} onChange={e=>setField('total_asientos', e.target.value)} required={!initial} className="mt-1 w-full rounded-lg border px-3 py-2" />
         </div>
       </div>
       <div>
         <label className="block text-sm text-slate-600">Municipio</label>
-        <select value={form.municipio_idmunicipio} onChange={e=>setField('municipio_idmunicipio', e.target.value)} required className="mt-1 w-full rounded-lg border px-3 py-2">
+        <select value={form.municipio_idmunicipio} onChange={e=>setField('municipio_idmunicipio', e.target.value)} required={!initial} className="mt-1 w-full rounded-lg border px-3 py-2">
           <option value="">Selecciona</option>
           {municipios.map(m => {
             const id = m.idmunicipio || m.id_municipio || m.id

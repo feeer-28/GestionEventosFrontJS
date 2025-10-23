@@ -167,6 +167,16 @@ export function encodeBasic(email, password) {
   return btoa(`${email}:${password}`)
 }
 
+function springAuthHeader() {
+  const token = localStorage.getItem('token')
+  if (!token) return {}
+  const isJwt = token.split('.').length === 3
+  if (isJwt) {
+    return { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` }
+  }
+  return { Authorization: token.startsWith('Basic ') ? token : `Basic ${token}` }
+}
+
 export const AuthAPI = {
   async login(email, password) {
     const data = await apiFetch('/auth/login', { method: 'POST', body: { email, password } })
@@ -476,7 +486,7 @@ export const EventoAPI = {
   async setStatus(id, status) {
     const res = await fetch(`http://localhost:8081/api/v1/event/${id}/status?status=${status}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...springAuthHeader() },
     })
     if (!res.ok) {
       let data

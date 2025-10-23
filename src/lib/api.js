@@ -23,9 +23,24 @@ export const LoginAPI = {
     }
     const ct = res.headers.get('content-type') || ''
     const data = ct.includes('application/json') ? await res.json() : {}
-    // Normalize shape expected by Login.jsx
+    // Normalize shape expected by Login.jsx and ProtectedRoute
+    const rawUser = data.user || data.person || { email }
+    const arrRole = (() => {
+      const r1 = Array.isArray(rawUser.roles) ? rawUser.roles : null
+      const r2 = Array.isArray(rawUser.authorities) ? rawUser.authorities : null
+      const r3 = Array.isArray(data.roles) ? data.roles : null
+      const r4 = Array.isArray(data.authorities) ? data.authorities : null
+      return r1 || r2 || r3 || r4 || null
+    })()
+    let roleVal = (rawUser.rol || rawUser.role || data.role || data.rol || '')
+    if (!roleVal && arrRole) {
+      const first = arrRole[0]
+      roleVal = (first?.name || first?.role || first?.authority || first) || ''
+    }
+    roleVal = roleVal || 'usuario'
+    const user = { ...rawUser, rol: roleVal }
     return {
-      user: data.user || data.person || { email, rol: data.role || data.rol || 'usuario' },
+      user,
       token: data.token || data.accessToken || data.jwt || null,
     }
   }
@@ -87,6 +102,16 @@ export async function apiFetch(path, { method = 'GET', headers = {}, body, auth 
 
 export function encodeBasic(email, password) {
   return btoa(`${email}:${password}`)
+}
+
+function springAuthHeader() {
+  const token = localStorage.getItem('token')
+  if (!token) return {}
+  const isJwt = token.split('.').length === 3
+  if (isJwt) {
+    return { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` }
+  }
+  return { Authorization: token.startsWith('Basic ') ? token : `Basic ${token}` }
 }
 
 export const AuthAPI = {
@@ -398,7 +423,7 @@ export const EventoAPI = {
   async setStatus(id, status) {
     const res = await fetch(`http://localhost:8081/api/v1/event/${id}/status?status=${status}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...springAuthHeader() },
     })
     if (!res.ok) {
       let data

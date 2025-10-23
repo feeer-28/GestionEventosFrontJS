@@ -102,25 +102,31 @@ export default function UserEvents() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {!loading && list.map(e => (
-          <Link key={e.ideventos || e.id} to={`/user/events/${e.ideventos || e.id}`} className="bg-white rounded-xl shadow hover:shadow-md transition p-4 hover:ring-2 hover:ring-purple-300">
-            <div className="font-semibold">{e.nombre_evento || e.nombre}</div>
-            <div className="text-sm text-slate-600">{e.municipio?.nombre_municipio || ''}</div>
-            <div className="text-sm text-slate-600">{e.fecha_inicio}{e.fecha_fin ? ` - ${e.fecha_fin}` : ''}</div>
-            {Array.isArray(artistsByEvent[e.ideventos || e.id]) && artistsByEvent[e.ideventos || e.id].length > 0 && (
-              <div className="mt-2 text-sm"><span className="font-medium text-blue-900">Artistas:</span> {artistsByEvent[e.ideventos || e.id].join(', ')}</div>
-            )}
-            {availByEvent[e.ideventos || e.id] && Object.keys(availByEvent[e.ideventos || e.id]).length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {Object.entries(availByEvent[e.ideventos || e.id]).map(([loc, cnt]) => (
-                  <span key={loc} className="inline-flex items-center gap-1 rounded-full bg-purple-50 text-purple-800 px-2 py-1 text-xs">
-                    <i className="bi bi-ticket-perforated" /> {loc}: {cnt}
-                  </span>
-                ))}
-              </div>
-            )}
-          </Link>
-        ))}
+        {!loading && list.map((e, idx) => {
+          const id = e.ideventos || e.id || e.event?.id || e.idEvent || e.eventId || e.id_event || e.idevento || e.code || e.codigo
+          const name = e.nombre_evento || e.nombre || e.name || e.event?.name || `Evento #${id ?? idx}`
+          const start = e.fecha_inicio || e.date_start || e.event?.date_start || ''
+          const end = e.fecha_fin || e.date_end || e.event?.date_end || ''
+          return (
+            <Link key={`${id ?? idx}-${idx}`} to={`/events/${id}`} state={{ id }} className="bg-white rounded-xl shadow hover:shadow-md transition p-4 hover:ring-2 hover:ring-purple-300">
+              <div className="font-semibold">{name}</div>
+              <div className="text-sm text-slate-600">{e.municipio?.nombre_municipio || e.event?.municipio?.name || ''}</div>
+              <div className="text-sm text-slate-600">{start}{end ? ` - ${end}` : ''}</div>
+              {Array.isArray(artistsByEvent[e.ideventos || e.id]) && artistsByEvent[e.ideventos || e.id].length > 0 && (
+                <div className="mt-2 text-sm"><span className="font-medium text-blue-900">Artistas:</span> {artistsByEvent[e.ideventos || e.id].join(', ')}</div>
+              )}
+              {availByEvent[e.ideventos || e.id] && Object.keys(availByEvent[e.ideventos || e.id]).length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {Object.entries(availByEvent[e.ideventos || e.id]).map(([loc, cnt]) => (
+                    <span key={loc} className="inline-flex items-center gap-1 rounded-full bg-purple-50 text-purple-800 px-2 py-1 text-xs">
+                      <i className="bi bi-ticket-perforated" /> {loc}: {cnt}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </Link>
+          )
+        })}
         {loading && (<div className="col-span-full text-slate-600">Cargando...</div>)}
       </div>
       {error && <div className="text-red-600 text-sm">{error}</div>}

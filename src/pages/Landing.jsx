@@ -1,7 +1,8 @@
 import { Container, Row, Col, Button } from 'react-bootstrap'
 import { useNavigate, Link } from 'react-router-dom'
-import { useEffect, useState } from 'react'
-import { UserAPI, CatalogAPI } from '../lib/api'
+import { useEffect, useMemo, useState } from 'react'
+import { UserAPI, CatalogAPI, EventoAPI } from '../lib/api'
+import Modal from '../components/Modal'
 
 const LandingPage = () => {
   const navigate = useNavigate()
@@ -11,6 +12,11 @@ const LandingPage = () => {
   const [filters, setFilters] = useState({ depto: '', muni: '', fecha: '', name: '' })
   const [departamentos, setDepartamentos] = useState([])
   const [municipios, setMunicipios] = useState([])
+  const [open, setOpen] = useState(false)
+  const [detail, setDetail] = useState(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
+  const [errorDetail, setErrorDetail] = useState('')
+  const [qty, setQty] = useState({}) // idx -> cantidad
 
   useEffect(() => {
     async function init() {
@@ -31,13 +37,14 @@ const LandingPage = () => {
       setError('')
       setLoading(true)
       try {
-        const params = new URLSearchParams()
-        if (filters.depto) params.append('departamento_id', filters.depto)
-        if (filters.muni) params.append('municipio_id', filters.muni)
-        if (filters.fecha) params.append('fecha', filters.fecha)
-        if (filters.name) params.append('q', filters.name)
-        const data = await UserAPI.eventos(params.toString() ? `?${params.toString()}` : '')
-        setItems(Array.isArray(data) ? data : [])
+        const springFilters = {}
+        if (filters.depto) springFilters.departmentId = filters.depto
+        if (filters.muni) springFilters.municipioId = filters.muni
+        if (filters.fecha) springFilters.startDate = filters.fecha
+        if (filters.name) springFilters.filter = filters.name
+        const data = await EventoAPI.list(springFilters)
+        const list = Array.isArray(data) ? data : (data?.content || data?.items || data?.data || [])
+        setItems(Array.isArray(list) ? list : [])
       } catch (err) {
         setError(err.message || 'Error al cargar eventos')
       } finally {
@@ -46,6 +53,29 @@ const LandingPage = () => {
     }
     load()
   }, [filters.depto, filters.muni, filters.fecha, filters.name])
+
+  async function openDetail(id) {
+    setErrorDetail('')
+    setLoadingDetail(true)
+    setDetail(null)
+    setOpen(true)
+    try {
+      const d = await EventoAPI.getDetail(id)
+      setDetail(d)
+      setQty({})
+    } catch (err) {
+      setErrorDetail(err.message || 'Error al cargar detalle')
+    } finally {
+      setLoadingDetail(false)
+    }
+  }
+
+  const tickets = useMemo(() => Array.isArray(detail?.tickets) ? detail.tickets : [], [detail])
+  const total = useMemo(() => tickets.reduce((acc, t, idx) => acc + (Number(qty[idx]||0) * Number(t.value||0)), 0), [tickets, qty])
+
+  function onPay() {
+    navigate('/login')
+  }
 
   return (
     <div className="bg-white">
@@ -123,6 +153,46 @@ const LandingPage = () => {
         </Container>
       </section>
 
+      {/* Modal detalle y compra rápida */}
+      <Modal open={open} title={detail?.event?.name || detail?.nombre_evento || 'Detalle del evento'} onClose={()=>setOpen(false)}>
+        {loadingDetail && <div className="text-muted">Cargando...</div>}
+        {errorDetail && <div className="text-danger small">{errorDetail}</div>}
+        {!loadingDetail && !errorDetail && detail && (
+          <div className="space-y-3">
+            <div className="text-slate-700">{detail.event?.description || detail.descripcion || ''}</div>
+            <div className="text-slate-600">{(detail.event?.date_start || '')}{detail.event?.date_end ? ` - ${detail.event.date_end}` : ''}</div>
+            <div className="text-slate-600">Municipio: {detail.event?.municipio?.name || `#${detail.event?.municipio?.id_municipio ?? ''}`}</div>
+            <div>
+              <div className="fw-semibold mb-2">Boletas por localidad</div>
+              {tickets.length === 0 ? (
+                <div className="text-muted">Sin boletas registradas</div>
+              ) : (
+                <div className="d-grid gap-2">
+                  {tickets.map((t, idx) => (
+                    <div key={idx} className="d-flex align-items-center justify-content-between border rounded px-2 py-2">
+                      <div>
+                        <div className="fw-medium">{t.locatedEvent?.name || `Localidad #${t.locatedEvent?.id_located_event ?? ''}`}</div>
+                        <div className="text-muted small">${t.value} • Disponibles: {t.count}</div>
+                      </div>
+                      <input type="number" min={0} max={Number(t.count)||0} value={qty[idx]||''} onChange={e=>{
+                        const v = e.target.value
+                        setQty(p=> ({ ...p, [idx]: v }))
+                      }} className="form-control ms-2" style={{ width: 100 }} placeholder="Cant." />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="d-flex align-items-center justify-content-between">
+              <div className="fw-semibold">Total: ${total}</div>
+              <Button onClick={onPay} className="px-4" style={{ backgroundColor: '#a252d6ff', border: 'none' }}>
+                Pagar
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* Filtros y Eventos disponibles */}
       <section className="py-5">
         <Container>
@@ -160,13 +230,13 @@ const LandingPage = () => {
           <Row className="g-3">
             {!loading && items.slice(0,6).map(e => (
               <Col key={e.ideventos || e.id} xs={12} sm={6} lg={4}>
-                <Link to={`/events/${e.ideventos || e.id}`} className="text-decoration-none">
+                <button onClick={()=>openDetail(e.ideventos || e.id || e.event?.id || e.idEvent || e.eventId || e.id_event || e.code || e.codigo)} className="w-100 p-0 bg-transparent border-0 text-start">
                   <div className="p-3 border rounded-3 h-100" style={{ background: '#ffffff' }}>
-                    <div className="fw-semibold" style={{ color: '#2E2E2E' }}>{e.nombre_evento || e.nombre}</div>
-                    <div className="text-muted small">{e.municipio?.nombre_municipio || ''}</div>
-                    <div className="text-muted small">{e.fecha_inicio}{e.fecha_fin ? ` - ${e.fecha_fin}` : ''}</div>
+                    <div className="fw-semibold" style={{ color: '#2E2E2E' }}>{e.nombre_evento || e.nombre || e.name || e.event?.name}</div>
+                    <div className="text-muted small">{e.municipio?.nombre_municipio || e.event?.municipio?.name || ''}</div>
+                    <div className="text-muted small">{e.fecha_inicio || e.date_start || e.event?.date_start}{(e.fecha_fin || e.date_end || e.event?.date_end) ? ` - ${e.fecha_fin || e.date_end || e.event?.date_end}` : ''}</div>
                   </div>
-                </Link>
+                </button>
               </Col>
             ))}
             {loading && (

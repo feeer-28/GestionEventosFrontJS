@@ -451,6 +451,25 @@ export const MunicipioAPI = {
   }
 }
 
+export const DepartmentAPI = {
+  async list() {
+    const res = await fetch('http://localhost:8081/api/v1/department/', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) {
+      let data
+      try { data = await res.json() } catch { data = { message: res.statusText } }
+      const error = new Error(data.message || 'Error de servidor')
+      error.status = res.status
+      error.data = data
+      throw error
+    }
+    const ct = res.headers.get('content-type') || ''
+    return ct.includes('application/json') ? res.json() : []
+  }
+}
+
 export const UserProfileAPI = {
   async get(id) {
     const res = await fetch(`http://localhost:8081/api/v1/user/${id}`, {

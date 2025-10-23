@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CatalogAPI, EventoAPI } from '../../lib/api'
+import { EventoAPI, MunicipioAPI, DepartmentAPI, UserAPI } from '../../lib/api'
 
 export default function UserEvents() {
-  const [filters, setFilters] = useState({ depto: '', muni: '', fecha: '' })
+  const [filters, setFilters] = useState({ depto: '', muni: '', search: '', start: '', end: '' })
   const [items, setItems] = useState([])
   const [departamentos, setDepartamentos] = useState([])
   const [municipios, setMunicipios] = useState([])
@@ -16,8 +16,8 @@ export default function UserEvents() {
     async function init() {
       try {
         const [deps, munis] = await Promise.all([
-          CatalogAPI.departamentos(),
-          CatalogAPI.municipios(),
+          DepartmentAPI.list(),
+          MunicipioAPI.list(),
         ])
         setDepartamentos(Array.isArray(deps) ? deps : [])
         setMunicipios(Array.isArray(munis) ? munis : [])
@@ -31,8 +31,14 @@ export default function UserEvents() {
       setError('')
       setLoading(true)
       try {
-        // Para el backend Spring, listamos todos los eventos públicos
-        const data = await EventoAPI.list()
+        const data = await EventoAPI.list({
+          // Backend espera estos nombres exactos:
+          ...(filters.muni ? { municipioId: Number(filters.muni) } : {}),
+          ...(filters.depto ? { departmentId: Number(filters.depto) } : {}),
+          ...(filters.search ? { filter: filters.search } : {}),
+          ...(filters.start ? { startDate: filters.start } : {}),
+          ...(filters.end ? { endDate: filters.end } : {}),
+        })
         setItems(Array.isArray(data) ? data : [])
       } catch (err) {
         setError(err.message || 'Error al cargar eventos')
@@ -41,11 +47,11 @@ export default function UserEvents() {
       }
     }
     load()
-  }, [filters.depto, filters.muni, filters.fecha])
+  }, [filters.depto, filters.muni, filters.search, filters.start, filters.end])
 
   useEffect(() => {
     async function enrich() {
-      const ids = (items || []).map(e => e.ideventos || e.id)
+      const ids = (items || []).map(e => e.id_event || e.ideventos || e.id)
       if (!ids.length) { setArtistsByEvent({}); setAvailByEvent({}); return }
       try {
         const artistPromises = ids.map(async id => {
@@ -89,20 +95,28 @@ export default function UserEvents() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+        <input
+          type="text"
+          value={filters.search}
+          onChange={e=>setFilters(p=>({...p, search: e.target.value }))}
+          placeholder="Buscar eventos..."
+          className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 col-span-1 sm:col-span-2"
+        />
         <select value={filters.depto} onChange={e=>setFilters(p=>({...p, depto: e.target.value, muni: ''}))} className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500">
           <option value="">Departamento</option>
           {departamentos.map(d => (
-            <option key={d.iddepartamento} value={d.iddepartamento}>{d.nombre_departamento}</option>
+            <option key={d.id_department || d.iddepartamento} value={d.id_department || d.iddepartamento}>{d.name || d.nombre_departamento}</option>
           ))}
         </select>
         <select value={filters.muni} onChange={e=>setFilters(p=>({...p, muni: e.target.value}))} className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500">
           <option value="">Municipio</option>
-          {municipios.filter(m => !filters.depto || m.departamento_iddepartamento == filters.depto).map(m => (
-            <option key={m.idmunicipio} value={m.idmunicipio}>{m.nombre_municipio}</option>
+          {municipios.filter(m => !filters.depto || (m.department?.id_department || m.departamento_iddepartamento) == filters.depto).map(m => (
+            <option key={m.id_municipio || m.idmunicipio} value={m.id_municipio || m.idmunicipio}>{m.name || m.nombre_municipio}</option>
           ))}
         </select>
-        <input type="date" value={filters.fecha} onChange={e=>setFilters(p=>({...p, fecha: e.target.value}))} className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+        <input type="date" value={filters.start} onChange={e=>setFilters(p=>({...p, start: e.target.value}))} className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+        <input type="date" value={filters.end} onChange={e=>setFilters(p=>({...p, end: e.target.value}))} className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500" />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

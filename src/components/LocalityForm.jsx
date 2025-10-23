@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AdminAPI } from '../lib/api'
+import { LocatedAPI } from '../lib/api'
 
 export default function LocalityForm({ initial, onClose, onSaved }) {
   const [form, setForm] = useState({ codigo: '', nombre: '' })
@@ -9,8 +9,8 @@ export default function LocalityForm({ initial, onClose, onSaved }) {
   useEffect(() => {
     if (initial) {
       setForm({
-        codigo: String(initial.idlocalidad || initial.id || initial.codigo || ''),
-        nombre: initial.nombre_localidad || initial.nombre || '',
+        codigo: String((initial.code ?? initial.codigo ?? initial.id ?? initial.idlocalidad) || ''),
+        nombre: (initial.name ?? initial.nombre ?? initial.nombre_localidad) || '',
       })
     }
   }, [initial])
@@ -22,11 +22,18 @@ export default function LocalityForm({ initial, onClose, onSaved }) {
     setError('')
     setLoading(true)
     try {
-      const payload = { codigo: Number(form.codigo), nombre: form.nombre }
+      const payload = {
+        code: String(form.codigo),
+        name: form.nombre,
+        description: form.nombre || '',
+        status: 1,
+      }
       if (initial) {
-        await AdminAPI.actualizarLocalidad(initial.idlocalidad || initial.id || initial.codigo, payload)
+        const updateId = (initial._id ?? initial.id ?? initial.idlocalidad ?? initial.idLocatedEvent ?? initial.locatedEventId ?? initial.id_located_event)
+        if (updateId == null) throw new Error('No se encontró el ID de la localidad para actualizar')
+        await LocatedAPI.actualizarLocalidad(updateId, payload)
       } else {
-        await AdminAPI.crearLocalidad(payload)
+        await LocatedAPI.create(payload)
       }
       onSaved?.()
     } catch (err) {
@@ -51,7 +58,7 @@ export default function LocalityForm({ initial, onClose, onSaved }) {
       </div>
       <div className="flex justify-end gap-2 pt-2">
         <button type="button" onClick={onClose} className="px-4 py-2 rounded border">Cancelar</button>
-        <button disabled={loading} className="px-4 py-2 rounded bg-emerald-600 text-white">{loading ? 'Guardando...' : 'Guardar'}</button>
+        <button disabled={loading} className="px-4 py-2 rounded bg-emerald-700 text-white">{loading ? 'Guardando...' : 'Guardar'}</button>
       </div>
     </form>
   )

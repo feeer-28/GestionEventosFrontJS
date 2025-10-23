@@ -1,35 +1,33 @@
-import { useParams, useNavigate } from 'react-router-dom'
-import { useEffect, useMemo, useState } from 'react'
-import { CatalogAPI, UserAPI } from '../../lib/api'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import Modal from '../../components/Modal'
+import { EventoAPI, PaymentMethodAPI, TicketAPI, BuyoutAPI } from '../../lib/api'
 
-export default function EventDetail() {
-  const { id } = useParams()
+export default function EventDetail({ eventId }) {
+  const { id: idParam } = useParams()
+  const location = useLocation()
+  const id = eventId || idParam || location.state?.id
   const navigate = useNavigate()
   const [evento, setEvento] = useState(null)
-  const [layout, setLayout] = useState([])
-  const [asientosDef, setAsientosDef] = useState([])
-  const [metodos, setMetodos] = useState([])
-  const [sel, setSel] = useState([]) // [{localidad, index}]
-  const [metodo, setMetodo] = useState('')
+  const [tickets, setTickets] = useState([])
+  const [artists, setArtists] = useState([])
+  const [methods, setMethods] = useState([])
+  const [allTickets, setAllTickets] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [card, setCard] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [form, setForm] = useState({ ticket_number: 1, methodId: '', ticketId: '', bank: '' })
+  const [successOpen, setSuccessOpen] = useState(false)
 
   useEffect(() => {
     async function load() {
       setError('')
       setLoading(true)
       try {
-        const [ev, lay, asientos, mps] = await Promise.all([
-          UserAPI.evento(id),
-          UserAPI.layoutAsientos(id),
-          UserAPI.asientosEvento(id),
-          CatalogAPI.metodosPago(),
-        ])
-        setEvento(ev)
-        setLayout(Array.isArray(lay) ? lay : [])
-        setAsientosDef(Array.isArray(asientos) ? asientos : [])
-        setMetodos(Array.isArray(mps) ? mps : [])
+        const detail = await EventoAPI.getDetail(id)
+        setEvento(detail?.event || null)
+        setTickets(Array.isArray(detail?.tickets) ? detail.tickets : [])
+        setArtists(Array.isArray(detail?.artists) ? detail.artists : [])
       } catch (err) {
         setError(err.message || 'Error al cargar evento')
       } finally {
@@ -39,150 +37,160 @@ export default function EventDetail() {
     load()
   }, [id])
 
-  const precioPorLocalidad = useMemo(() => {
-    const map = {}
-    layout.forEach(l => { map[l.localidad] = l.valor_asiento })
-    return map
-  }, [layout])
-
-  const asientoIdPorLocalidad = useMemo(() => {
-    const map = {}
-    asientosDef.forEach(a => { map[a.nombre_localidad] = a.idlocalidad_evento })
-    return map
-  }, [asientosDef])
-
-  const total = useMemo(() => sel.reduce((acc, s) => acc + (precioPorLocalidad[s.localidad] || 0), 0), [sel, precioPorLocalidad])
-
-  const disponibilidadPorLocalidad = useMemo(() => {
-    const map = {}
-    layout.forEach(l => {
-      const disponibles = Array.isArray(l.puestos) ? l.puestos.filter(p => p.estado === 'disponible').length : 0
-      map[l.localidad] = disponibles
-    })
-    return map
-  }, [layout])
-
-  function toggle(localidad, index) {
-    setError('')
-    const key = `${localidad}:${index}`
-    const isSelected = sel.some(x => `${x.localidad}:${x.index}` === key)
-    if (isSelected) {
-      setSel(prev => prev.filter(x => `${x.localidad}:${x.index}` !== key))
-      return
+  // Cargar métodos de pago y tickets
+  useEffect(() => {
+    async function loadCatalogs() {
+      try {
+        const [pm, tk] = await Promise.all([
+          PaymentMethodAPI.list(),
+          TicketAPI.list(),
+        ])
+        setMethods(Array.isArray(pm) ? pm : [])
+        setAllTickets(Array.isArray(tk) ? tk : [])
+      } catch {}
     }
-    const countLocalidad = sel.filter(x => x.localidad === localidad).length
-    if (countLocalidad >= 10) {
-      setError('Máximo 10 boletas por localidad por transacción')
-      return
-    }
-    const disp = disponibilidadPorLocalidad[localidad] || 0
-    if (countLocalidad + 1 > disp) {
-      setError('No hay disponibilidad suficiente en esta localidad')
-      return
-    }
-    setSel(prev => [...prev, { localidad, index }])
+    loadCatalogs()
+  }, [])
+
+  function fmt(dateStr) {
+    if (!dateStr) return ''
+    const d = new Date(dateStr)
+    return isNaN(d) ? String(dateStr) : d.toLocaleDateString()
   }
 
-  async function pagar() {
+  const title = evento?.name || evento?.nombre || 'Evento'
+  const muni = evento?.municipio?.name || evento?.municipio?.nombre_municipio || ''
+  const dept = evento?.municipio?.department?.name || ''
+  const schedule = evento?.schedule || ''
+  const start = fmt(evento?.date_start || evento?.fecha_inicio)
+  const end = fmt(evento?.date_end || evento?.fecha_fin)
+
+  const relatedTickets = Array.isArray(allTickets)
+    ? allTickets.filter(t => (t.event?.id_event || t.event?.id || t.evento_id) == (evento?.id_event || evento?.id))
+    : []
+
+  async function onBuy(e) {
+    e.preventDefault()
     setError('')
-    if (!metodo) { setError('Selecciona un método de pago'); return }
-    if (sel.length===0) { setError('Selecciona al menos 1 asiento'); return }
+    if (!form.methodId) { setError('Selecciona un método de pago'); return }
+    if (!form.ticketId) { setError('Selecciona un ticket'); return }
     const user = JSON.parse(localStorage.getItem('user') || 'null')
-    if (!user) { navigate('/register'); return }
-    // Validar límites por localidad
-    const porLocalidad = sel.reduce((acc, s) => { acc[s.localidad] = (acc[s.localidad]||0)+1; return acc }, {})
-    for (const [loc, cant] of Object.entries(porLocalidad)) {
-      if (cant > 10) { setError('Máximo 10 boletas por localidad por transacción'); return }
-      const disp = disponibilidadPorLocalidad[loc] || 0
-      if (cant > disp) { setError('No hay disponibilidad suficiente en esta localidad'); return }
+    const userId = user?.id_user || user?.id || user?.idusuario
+    if (!userId) { setError('Inicia sesión para comprar'); return }
+    const body = {
+      ticket_number: Number(form.ticket_number) || 1,
+      state_pay: 1,
+      payMethod: { id_pay_method: Number(form.methodId) },
+      user: { id_user: Number(userId) },
+      ticket: { id_ticket: Number(form.ticketId) },
     }
-    // Validar número de tarjeta mock (15 dígitos)
-    if (!/^\d{15}$/.test(card)) { setError('Ingresa un número de tarjeta de 15 dígitos'); return }
+    setSubmitting(true)
     try {
-      const compra = await UserAPI.crearCompra({
-        idcomprar: undefined,
-        valor_total: String(total),
-        metodo_pago_idmetodo_pago: Number(metodo),
-        usuario_idusuario: user.idusuario,
-      })
-      const compraId = compra.idcomprar || compra.id || compra?.compra?.idcomprar
-      for (const s of sel) {
-        const asientoId = asientoIdPorLocalidad[s.localidad]
-        const valor = precioPorLocalidad[s.localidad] || 0
-        await UserAPI.crearBoleta({
-          idboleta: undefined,
-          valor_total: valor,
-          compra_idcomprar: compraId,
-          asiento_idlocalidad_evento: asientoId,
-        })
-      }
-      navigate('/user/history')
+      await BuyoutAPI.create(body)
+      setSuccessOpen(true)
     } catch (err) {
-      setError(err.message || 'No se pudo procesar el pago')
+      const msg = (err && (err.data?.message || err.message)) || 'No se pudo completar la compra'
+      setError(msg)
+    } finally {
+      setSubmitting(false)
     }
   }
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <div className="bg-white rounded-xl shadow p-4">
-        <div className="text-2xl font-bold text-blue-900">{evento?.nombre_evento || 'Evento'}</div>
-        <div className="text-slate-600">{evento?.descripcion}</div>
-        <div className="text-slate-600">{evento?.fecha_inicio}{evento?.fecha_fin ? ` - ${evento.fecha_fin}` : ''}</div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow p-4 space-y-4">
-        <div className="font-semibold">Selecciona asientos</div>
-        {loading && <div className="text-slate-600">Cargando...</div>}
+      <div className="space-y-4">
+        {loading && <div>Cargando...</div>}
         {error && <div className="text-red-600 text-sm">{error}</div>}
-        {!loading && (
-          <div className="space-y-4">
-            {layout.map((l, idx) => (
-              <div key={idx} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium">{l.localidad}</div>
-                  <div className="text-sm text-slate-600">${l.valor_asiento}</div>
-                </div>
-                <div className="grid grid-cols-8 sm:grid-cols-12 gap-3">
-                  {l.puestos?.map((p, i) => (
-                    <button
-                      key={i}
-                      disabled={p.estado !== 'disponible'}
-                      onClick={()=>toggle(l.localidad, p.index)}
-                      className={`w-8 h-8 rounded-full border flex items-center justify-center text-[10px] disabled:opacity-40 ${sel.some(x=>x.localidad===l.localidad && x.index===p.index)?'bg-purple-600 text-white':'bg-white'}`}
-                      title={`${l.localidad} - ${p.index}`}
-                    >
-                      {p.index}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
+
+        {/* Detalle del evento */}
+        {!loading && evento && (
+          <div className="bg-white rounded-xl shadow p-4 space-y-2">
+            <h2 className="text-2xl font-bold text-blue-900">{title}</h2>
+            <div className="text-sm text-slate-700">{muni}{dept ? `, ${dept}` : ''}</div>
+            <div className="text-sm text-slate-700">{start}{end ? ` - ${end}` : ''}{schedule ? ` · ${schedule}` : ''}</div>
+            {evento.description && <p className="text-slate-700 mt-2">{evento.description}</p>}
           </div>
         )}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
-          <select value={metodo} onChange={e=>setMetodo(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500">
-            <option value="">Método de pago</option>
-            {metodos.map(m => (
-              <option key={m.idmetodo_pago} value={m.idmetodo_pago}>{m.nombre}</option>
-            ))}
-          </select>
-          <div>
-            <input
-              type="text"
-              value={card}
-              onChange={e=>setCard(e.target.value.replace(/[^0-9]/g, ''))}
-              placeholder="Número de tarjeta (15 dígitos)"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              maxLength={15}
-            />
-            <div className="text-xs text-slate-500 mt-1">Dato de prueba, solo números (15 dígitos)</div>
+
+        {/* Tickets */}
+        {!loading && tickets.length > 0 && (
+          <div className="bg-white rounded-xl shadow p-4">
+            <h3 className="text-lg font-semibold mb-2">Boletas</h3>
+            <div className="flex flex-wrap gap-2">
+              {tickets.map(t => (
+                <div key={t.id_ticket} className="rounded border px-3 py-2 text-sm">
+                  <div className="font-medium">{t.locatedEvent?.name || 'General'}</div>
+                  <div>Disponibles: {t.count}</div>
+                  <div>Valor: ${Number(t.value || 0).toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="text-slate-700 font-semibold">Total: ${total}</div>
-          <button onClick={pagar} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white">
-            <i className="bi bi-credit-card" /> Pagar
+        )}
+
+        {/* Artistas */}
+        {!loading && artists.length > 0 && (
+          <div className="bg-white rounded-xl shadow p-4">
+            <h3 className="text-lg font-semibold mb-2">Artistas</h3>
+            <ul className="list-disc list-inside text-sm">
+              {artists.map(a => (
+                <li key={a.id_artist}>{`${a.name || ''} ${a.last_name || ''}`.trim()} {a.genderMusic?.name ? `· ${a.genderMusic.name}` : ''}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* Formulario de compra */}
+      {!loading && evento && (
+        <form onSubmit={onBuy} className="bg-white rounded-xl shadow p-4 space-y-3">
+          <h3 className="text-lg font-semibold">Comprar boletas</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+            <div>
+              <label className="block text-sm text-slate-600">Ticket</label>
+              <select value={form.ticketId} onChange={e=>setForm(p=>({...p, ticketId: e.target.value}))} required className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                <option value="">Selecciona ticket</option>
+                {relatedTickets.map(t => (
+                  <option key={t.id_ticket} value={t.id_ticket}>{t.locatedEvent?.name || 'General'} · ${Number(t.value||0).toLocaleString()} · Disp: {t.count}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-slate-600">Cantidad</label>
+              <input type="number" min={1} max={10} value={form.ticket_number} onChange={e=>setForm(p=>({...p, ticket_number: e.target.value}))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-600">Método de pago</label>
+              <select value={form.methodId} onChange={e=>setForm(p=>({...p, methodId: e.target.value}))} required className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                <option value="">Selecciona método</option>
+                {methods.map(m => (
+                  <option key={m.id_pay_method || m.idmetodo_pago} value={m.id_pay_method || m.idmetodo_pago}>{m.type}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-slate-600">Cuenta bancaria</label>
+              <input type="text" value={form.bank} onChange={e=>setForm(p=>({...p, bank: e.target.value}))} placeholder="Ingrese cuenta bancaria" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button disabled={submitting} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white">
+              {submitting ? 'Procesando...' : 'Comprar'}
+            </button>
+          </div>
+        </form>
+      )}
+      
+      {/* Modal de éxito */}
+      <Modal open={successOpen} title="Compra exitosa" onClose={()=>{}} disableBackdropClose hideClose>
+        <div className="space-y-3">
+          <p>Tu compra se realizó correctamente.</p>
+          <button onClick={()=>navigate('/user/events', { replace: true })} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white">
+            Volver
           </button>
         </div>
-      </div>
+      </Modal>
+
     </div>
   )
 }

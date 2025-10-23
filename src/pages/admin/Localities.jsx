@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import Modal from '../../components/Modal'
 import { useToast } from '../../context/ToastContext'
-import { AdminAPI } from '../../lib/api'
+import { LocatedAPI } from '../../lib/api'
 import LocalityForm from '../../components/LocalityForm'
 
 export default function AdminLocalities() {
@@ -16,8 +16,13 @@ export default function AdminLocalities() {
     setError('')
     setLoading(true)
     try {
-      const data = await AdminAPI.localidades()
-      setItems(Array.isArray(data) ? data : [])
+      const data = await LocatedAPI.list()
+      const arr = Array.isArray(data) ? data : []
+      const norm = arr.map(it => ({
+        ...it,
+        _id: (it.id ?? it.idlocalidad ?? it.idLocatedEvent ?? it.locatedEventId ?? it.id_located_event ?? null),
+      }))
+      setItems(norm)
     } catch (err) {
       setError(err.message || 'Error al cargar localidades')
     } finally {
@@ -28,13 +33,13 @@ export default function AdminLocalities() {
   useEffect(() => { load() }, [])
 
   async function onDeactivate(item) {
-    if (!confirm('¿Desactivar esta localidad?')) return
+    if (!confirm('¿Eliminar esta localidad permanentemente?')) return
     try {
-      await AdminAPI.desactivarLocalidad(item.idlocalidad || item.id || item.codigo)
-      show('Localidad desactivada', 'success')
+      await LocatedAPI.eliminarLocalidad(item._id ?? item.id_located_event ?? item.id ?? item.idlocalidad)
+      show('Localidad eliminada', 'success')
       await load()
     } catch (err) {
-      show(err.message || 'No se pudo desactivar', 'error')
+      show(err.message || 'No se pudo eliminar', 'error')
     }
   }
 
@@ -58,9 +63,9 @@ export default function AdminLocalities() {
           </thead>
           <tbody>
             {!loading && items.map(l => (
-              <tr key={l.idlocalidad || l.id || l.codigo} className="border-t">
-                <td className="px-4 py-2">{l.idlocalidad || l.id || l.codigo}</td>
-                <td className="px-4 py-2">{l.nombre_localidad || l.nombre}</td>
+              <tr key={(l._id ?? l.id ?? l.idlocalidad ?? l.codigo ?? l.code)} className="border-t">
+                <td className="px-4 py-2">{l.codigo ?? l.code ?? l.id ?? l.idlocalidad}</td>
+                <td className="px-4 py-2">{l.nombre_localidad ?? l.nombre ?? l.name}</td>
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-2">
                     <button onClick={()=>{ setEditing(l); setOpen(true) }} className="p-2 rounded hover:bg-slate-100"><i className="bi bi-pencil" /></button>

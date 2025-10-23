@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CatalogAPI, UserAPI } from '../../lib/api'
+import { CatalogAPI, EventoAPI } from '../../lib/api'
 
 export default function UserEvents() {
   const [filters, setFilters] = useState({ depto: '', muni: '', fecha: '' })
@@ -31,11 +31,8 @@ export default function UserEvents() {
       setError('')
       setLoading(true)
       try {
-        const params = new URLSearchParams()
-        if (filters.depto) params.append('departamento_id', filters.depto)
-        if (filters.muni) params.append('municipio_id', filters.muni)
-        if (filters.fecha) params.append('fecha', filters.fecha)
-        const data = await UserAPI.eventos(params.toString() ? `?${params.toString()}` : '')
+        // Para el backend Spring, listamos todos los eventos públicos
+        const data = await EventoAPI.list()
         setItems(Array.isArray(data) ? data : [])
       } catch (err) {
         setError(err.message || 'Error al cargar eventos')
@@ -83,6 +80,13 @@ export default function UserEvents() {
 
   const list = useMemo(() => items, [items])
 
+  function fmt(dateStr) {
+    if (!dateStr) return ''
+    const d = new Date(dateStr)
+    if (isNaN(d)) return String(dateStr)
+    return d.toLocaleDateString()
+  }
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -102,17 +106,25 @@ export default function UserEvents() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {!loading && list.map(e => (
-          <Link key={e.ideventos || e.id} to={`/user/events/${e.ideventos || e.id}`} className="bg-white rounded-xl shadow hover:shadow-md transition p-4 hover:ring-2 hover:ring-purple-300">
-            <div className="font-semibold">{e.nombre_evento || e.nombre}</div>
-            <div className="text-sm text-slate-600">{e.municipio?.nombre_municipio || ''}</div>
-            <div className="text-sm text-slate-600">{e.fecha_inicio}{e.fecha_fin ? ` - ${e.fecha_fin}` : ''}</div>
-            {Array.isArray(artistsByEvent[e.ideventos || e.id]) && artistsByEvent[e.ideventos || e.id].length > 0 && (
+        {!loading && list.map(e => {
+          const id = e.id_event || e.ideventos || e.id
+          const title = e.name || e.nombre_evento || e.nombre
+          const muni = e.municipio?.name || e.municipio?.nombre_municipio || ''
+          const dept = e.municipio?.department?.name || ''
+          const start = fmt(e.date_start || e.fecha_inicio)
+          const end = fmt(e.date_end || e.fecha_fin)
+          const schedule = e.schedule || ''
+          return (
+          <Link key={id} to={id ? `/user/events/${id}` : '#'} className="bg-white rounded-xl shadow hover:shadow-md transition p-4 hover:ring-2 hover:ring-purple-300">
+            <div className="font-semibold">{title}</div>
+            <div className="text-sm text-slate-600">{muni}{dept ? `, ${dept}` : ''}</div>
+            <div className="text-sm text-slate-600">{start}{end ? ` - ${end}` : ''}{schedule ? ` · ${schedule}` : ''}</div>
+            {Array.isArray(artistsByEvent[id]) && artistsByEvent[id].length > 0 && (
               <div className="mt-2 text-sm"><span className="font-medium text-blue-900">Artistas:</span> {artistsByEvent[e.ideventos || e.id].join(', ')}</div>
             )}
-            {availByEvent[e.ideventos || e.id] && Object.keys(availByEvent[e.ideventos || e.id]).length > 0 && (
+            {availByEvent[id] && Object.keys(availByEvent[id]).length > 0 && (
               <div className="mt-2 flex flex-wrap gap-2">
-                {Object.entries(availByEvent[e.ideventos || e.id]).map(([loc, cnt]) => (
+                {Object.entries(availByEvent[id]).map(([loc, cnt]) => (
                   <span key={loc} className="inline-flex items-center gap-1 rounded-full bg-purple-50 text-purple-800 px-2 py-1 text-xs">
                     <i className="bi bi-ticket-perforated" /> {loc}: {cnt}
                   </span>
@@ -120,7 +132,7 @@ export default function UserEvents() {
               </div>
             )}
           </Link>
-        ))}
+        )})}
         {loading && (<div className="col-span-full text-slate-600">Cargando...</div>)}
       </div>
       {error && <div className="text-red-600 text-sm">{error}</div>}
